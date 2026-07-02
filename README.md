@@ -6,15 +6,20 @@ The project includes user authentication, profile management, posts, likes, comm
 
 ## Project Purpose
 
-This backend was created as a final Node.js project.  
-The goal is to build a REST API where users can:
+## Project Purpose
+
+The goal is to build a REST API for an Instagram-like social media application where users can:
 
 - register and log in;
+- reset their password;
 - manage their profile;
+- search users;
+- follow and unfollow other users;
 - create, update and delete posts;
 - like and unlike posts;
 - add and delete comments;
-- search users;
+- receive notifications for follows, likes and comments;
+- create conversations and exchange messages;
 - store all data in MongoDB.
 
 ## Tech Stack
