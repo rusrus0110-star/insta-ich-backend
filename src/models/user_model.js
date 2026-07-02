@@ -66,6 +66,18 @@ const user_schema = new mongoose.Schema(
         ref: "User",
       },
     ],
+
+    password_reset_token: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    password_reset_expires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
