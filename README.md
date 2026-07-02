@@ -6,8 +6,6 @@ The project includes user authentication, profile management, posts, likes, comm
 
 ## Project Purpose
 
-## Project Purpose
-
 The goal is to build a REST API for an Instagram-like social media application where users can:
 
 - register and log in;
