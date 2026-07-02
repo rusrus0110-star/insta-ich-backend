@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import auth_routes from "./routes/auth_routes.js";
 import user_routes from "./routes/user_routes.js";
 import post_routes from "./routes/post_routes.js";
+import comment_routes from "./routes/comment_routes.js";
 
 import not_found_middleware from "./middlewares/not_found_middleware.js";
 import error_middleware from "./middlewares/error_middleware.js";
@@ -50,6 +51,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", auth_limiter, auth_routes);
 app.use("/api/users", user_routes);
 app.use("/api/posts", post_routes);
+app.use("/api/comments", comment_routes);
 
 app.use(not_found_middleware);
 app.use(error_middleware);
