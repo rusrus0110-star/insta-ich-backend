@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 import Post from "../models/post_model.js";
 import User from "../models/user_model.js";
+import Comment from "../models/comment_model.js";
 import async_handler from "../utils/async_handler.js";
 
 const is_valid_object_id = (id) => {
@@ -29,7 +30,11 @@ const build_author_response = (author) => {
   };
 };
 
-const build_post_response = (post, current_user_id = null) => {
+const build_post_response = (
+  post,
+  current_user_id = null,
+  comments_count = 0,
+) => {
   const current_user_id_string = current_user_id
     ? String(current_user_id)
     : null;
@@ -40,12 +45,38 @@ const build_post_response = (post, current_user_id = null) => {
     image: post.image,
     caption: post.caption,
     likes_count: post.likes.length,
+    comments_count,
     is_liked_by_current_user: current_user_id_string
       ? post.likes.some((user_id) => String(user_id) === current_user_id_string)
       : false,
     created_at: post.createdAt,
     updated_at: post.updatedAt,
   };
+};
+
+const get_comments_count_for_posts = async (post_ids) => {
+  const result = await Comment.aggregate([
+    {
+      $match: {
+        post: {
+          $in: post_ids.map((id) => new mongoose.Types.ObjectId(id)),
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$post",
+        count: {
+          $sum: 1,
+        },
+      },
+    },
+  ]);
+
+  return result.reduce((acc, item) => {
+    acc[String(item._id)] = item.count;
+    return acc;
+  }, {});
 };
 
 export const create_post = async_handler(async (req, res) => {
@@ -80,7 +111,7 @@ export const create_post = async_handler(async (req, res) => {
   res.status(201).json({
     success: true,
     message: "Post created successfully",
-    post: build_post_response(populated_post, req.user._id),
+    post: build_post_response(populated_post, req.user._id, 0),
   });
 });
 
@@ -98,6 +129,9 @@ export const get_all_posts = async_handler(async (req, res) => {
     Post.countDocuments(),
   ]);
 
+  const post_ids = posts.map((post) => post._id);
+  const comments_count_map = await get_comments_count_for_posts(post_ids);
+
   res.status(200).json({
     success: true,
     page,
@@ -105,7 +139,13 @@ export const get_all_posts = async_handler(async (req, res) => {
     total,
     pages: Math.ceil(total / limit),
     count: posts.length,
-    posts: posts.map((post) => build_post_response(post, req.user._id)),
+    posts: posts.map((post) =>
+      build_post_response(
+        post,
+        req.user._id,
+        comments_count_map[String(post._id)] || 0,
+      ),
+    ),
   });
 });
 
@@ -128,10 +168,19 @@ export const get_user_posts = async_handler(async (req, res) => {
     .populate("author", "username full_name avatar")
     .sort({ createdAt: -1 });
 
+  const post_ids = posts.map((post) => post._id);
+  const comments_count_map = await get_comments_count_for_posts(post_ids);
+
   res.status(200).json({
     success: true,
     count: posts.length,
-    posts: posts.map((post) => build_post_response(post, req.user._id)),
+    posts: posts.map((post) =>
+      build_post_response(
+        post,
+        req.user._id,
+        comments_count_map[String(post._id)] || 0,
+      ),
+    ),
   });
 });
 
@@ -153,9 +202,11 @@ export const get_post_by_id = async_handler(async (req, res) => {
     throw new Error("Post not found");
   }
 
+  const comments_count = await Comment.countDocuments({ post: post._id });
+
   res.status(200).json({
     success: true,
-    post: build_post_response(post, req.user._id),
+    post: build_post_response(post, req.user._id, comments_count),
   });
 });
 
@@ -207,10 +258,14 @@ export const update_post = async_handler(async (req, res) => {
     "username full_name avatar",
   );
 
+  const comments_count = await Comment.countDocuments({
+    post: updated_post._id,
+  });
+
   res.status(200).json({
     success: true,
     message: "Post updated successfully",
-    post: build_post_response(populated_post, req.user._id),
+    post: build_post_response(populated_post, req.user._id, comments_count),
   });
 });
 
@@ -234,10 +289,59 @@ export const delete_post = async_handler(async (req, res) => {
     throw new Error("You can delete only your own posts");
   }
 
-  await post.deleteOne();
+  await Promise.all([Comment.deleteMany({ post: post._id }), post.deleteOne()]);
 
   res.status(200).json({
     success: true,
-    message: "Post deleted successfully",
+    message: "Post and related comments deleted successfully",
+  });
+});
+
+export const toggle_post_like = async_handler(async (req, res) => {
+  const { post_id } = req.params;
+
+  if (!is_valid_object_id(post_id)) {
+    res.status(400);
+    throw new Error("Invalid post ID");
+  }
+
+  const post = await Post.findById(post_id);
+
+  if (!post) {
+    res.status(404);
+    throw new Error("Post not found");
+  }
+
+  const current_user_id = String(req.user._id);
+
+  const already_liked = post.likes.some(
+    (user_id) => String(user_id) === current_user_id,
+  );
+
+  if (already_liked) {
+    post.likes = post.likes.filter(
+      (user_id) => String(user_id) !== current_user_id,
+    );
+  } else {
+    post.likes.push(req.user._id);
+  }
+
+  const updated_post = await post.save();
+
+  const populated_post = await Post.findById(updated_post._id).populate(
+    "author",
+    "username full_name avatar",
+  );
+
+  const comments_count = await Comment.countDocuments({
+    post: updated_post._id,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: already_liked
+      ? "Post unliked successfully"
+      : "Post liked successfully",
+    post: build_post_response(populated_post, req.user._id, comments_count),
   });
 });
