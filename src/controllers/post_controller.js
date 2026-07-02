@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-
+import create_notification from "../utils/create_notification.js";
 import Post from "../models/post_model.js";
 import User from "../models/user_model.js";
 import Comment from "../models/comment_model.js";
@@ -324,6 +324,13 @@ export const toggle_post_like = async_handler(async (req, res) => {
     );
   } else {
     post.likes.push(req.user._id);
+
+    await create_notification({
+      recipient: post.author,
+      sender: req.user._id,
+      type: "like",
+      post: post._id,
+    });
   }
 
   const updated_post = await post.save();

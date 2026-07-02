@@ -2,12 +2,17 @@ import mongoose from "mongoose";
 
 import User from "../models/user_model.js";
 import async_handler from "../utils/async_handler.js";
+import create_notification from "../utils/create_notification.js";
 
 const is_valid_object_id = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
-const build_user_response = (user) => {
+const build_user_response = (user, current_user_id = null) => {
+  const current_user_id_string = current_user_id
+    ? String(current_user_id)
+    : null;
+
   return {
     id: user._id,
     username: user.username,
@@ -17,6 +22,11 @@ const build_user_response = (user) => {
     avatar: user.avatar,
     followers_count: user.followers.length,
     following_count: user.following.length,
+    is_followed_by_current_user: current_user_id_string
+      ? user.followers.some(
+          (follower_id) => String(follower_id) === current_user_id_string,
+        )
+      : false,
     created_at: user.createdAt,
     updated_at: user.updatedAt,
   };
@@ -39,7 +49,7 @@ export const get_user_profile = async_handler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    user: build_user_response(user),
+    user: build_user_response(user, req.user._id),
   });
 });
 
@@ -121,7 +131,7 @@ export const update_current_user_profile = async_handler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Profile updated successfully",
-    user: build_user_response(updated_user),
+    user: build_user_response(updated_user, req.user._id),
   });
 });
 
@@ -159,6 +169,70 @@ export const search_users = async_handler(async (req, res) => {
       avatar: user.avatar,
       followers_count: user.followers.length,
       following_count: user.following.length,
+      is_followed_by_current_user: user.followers.some(
+        (follower_id) => String(follower_id) === String(req.user._id),
+      ),
     })),
+  });
+});
+
+export const toggle_follow_user = async_handler(async (req, res) => {
+  const { user_id } = req.params;
+
+  if (!is_valid_object_id(user_id)) {
+    res.status(400);
+    throw new Error("Invalid user ID");
+  }
+
+  if (String(user_id) === String(req.user._id)) {
+    res.status(400);
+    throw new Error("You cannot follow yourself");
+  }
+
+  const target_user = await User.findById(user_id);
+
+  if (!target_user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  const current_user = await User.findById(req.user._id);
+
+  if (!current_user) {
+    res.status(404);
+    throw new Error("Current user not found");
+  }
+
+  const already_following = current_user.following.some(
+    (following_id) => String(following_id) === String(target_user._id),
+  );
+
+  if (already_following) {
+    current_user.following = current_user.following.filter(
+      (following_id) => String(following_id) !== String(target_user._id),
+    );
+
+    target_user.followers = target_user.followers.filter(
+      (follower_id) => String(follower_id) !== String(current_user._id),
+    );
+  } else {
+    current_user.following.push(target_user._id);
+    target_user.followers.push(current_user._id);
+
+    await create_notification({
+      recipient: target_user._id,
+      sender: current_user._id,
+      type: "follow",
+    });
+  }
+
+  await Promise.all([current_user.save(), target_user.save()]);
+
+  res.status(200).json({
+    success: true,
+    message: already_following
+      ? "User unfollowed successfully"
+      : "User followed successfully",
+    user: build_user_response(target_user, current_user._id),
   });
 });

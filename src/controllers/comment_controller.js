@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Post from "../models/post_model.js";
 import Comment from "../models/comment_model.js";
 import async_handler from "../utils/async_handler.js";
+import create_notification from "../utils/create_notification.js";
 
 const is_valid_object_id = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
@@ -45,17 +46,25 @@ export const create_comment = async_handler(async (req, res) => {
     throw new Error("Comment must be less than 300 characters");
   }
 
-  const post_exists = await Post.exists({ _id: post_id });
+  const post = await Post.findById(post_id);
 
-  if (!post_exists) {
+  if (!post) {
     res.status(404);
     throw new Error("Post not found");
   }
 
   const comment = await Comment.create({
-    post: post_id,
+    post: post._id,
     author: req.user._id,
     text: normalized_text,
+  });
+
+  await create_notification({
+    recipient: post.author,
+    sender: req.user._id,
+    type: "comment",
+    post: post._id,
+    comment: comment._id,
   });
 
   const populated_comment = await Comment.findById(comment._id).populate(
@@ -95,6 +104,7 @@ export const get_post_comments = async_handler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
+
     Comment.countDocuments({ post: post_id }),
   ]);
 
