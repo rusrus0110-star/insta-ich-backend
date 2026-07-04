@@ -3,6 +3,7 @@ import crypto from "crypto";
 import User from "../models/user_model.js";
 import generate_token from "../utils/generate_token.js";
 import async_handler from "../utils/async_handler.js";
+import send_email from "../utils/send_email.js";
 
 const normalize_email = (email) => {
   return String(email || "")
@@ -34,6 +35,20 @@ const build_auth_user_response = (user) => {
     following_count: user.following.length,
     created_at: user.createdAt,
   };
+};
+
+const get_client_url = (req) => {
+  const request_origin = req.get("origin");
+
+  if (request_origin) {
+    return request_origin;
+  }
+
+  if (process.env.CLIENT_URL) {
+    return process.env.CLIENT_URL;
+  }
+
+  return "http://localhost:5173";
 };
 
 export const register_user = async_handler(async (req, res) => {
@@ -147,29 +162,30 @@ export const get_current_user = async_handler(async (req, res) => {
 });
 
 export const forgot_password = async_handler(async (req, res) => {
-  const { email } = req.body;
+  const { email, login_identifier, username } = req.body;
 
-  const normalized_email = normalize_email(email);
-
-  if (!normalized_email) {
-    res.status(400);
-    throw new Error("Email is required");
-  }
-
-  const user = await User.findOne({ email: normalized_email }).select(
-    "+password_reset_token +password_reset_expires",
+  const identifier = normalize_login_identifier(
+    login_identifier || email || username,
   );
 
+  if (!identifier) {
+    res.status(400);
+    throw new Error("Email or username is required");
+  }
+
+  const user = await User.findOne({
+    $or: [{ email: identifier }, { username: identifier }],
+  }).select("+password_reset_token +password_reset_expires");
+
   /*
-    Security note:
-    In production we should not reveal whether the email exists.
-    For this learning project we still return a neutral success response.
+    Production security:
+    Do not reveal whether the account exists.
   */
   if (!user) {
     return res.status(200).json({
       success: true,
       message:
-        "If an account with this email exists, a reset token has been generated.",
+        "If an account with this email or username exists, reset instructions have been sent.",
     });
   }
 
@@ -185,12 +201,56 @@ export const forgot_password = async_handler(async (req, res) => {
 
   await user.save({ validateBeforeSave: false });
 
-  res.status(200).json({
-    success: true,
-    message: "Password reset token generated successfully",
-    reset_token,
-    expires_in_minutes: 15,
-  });
+  const client_url = get_client_url(req);
+  const reset_url = `${client_url}/set-new-password?token=${reset_token}`;
+
+  const email_html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+      <h2>Reset your ICHgram password</h2>
+
+      <p>Hello ${user.full_name || user.username},</p>
+
+      <p>You requested a password reset for your ICHgram account.</p>
+
+      <p>This link is valid for 15 minutes:</p>
+
+      <p>
+        <a href="${reset_url}" style="color: #0095f6;">
+          Reset your password
+        </a>
+      </p>
+
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+
+      <p style="word-break: break-all; color: #555;">
+        ${reset_url}
+      </p>
+
+      <p>If you did not request this, you can ignore this email.</p>
+    </div>
+  `;
+
+  try {
+    await send_email({
+      to: user.email,
+      subject: "Reset your ICHgram password",
+      html: email_html,
+    });
+
+    res.status(200).json({
+      success: true,
+      message:
+        "If an account with this email or username exists, reset instructions have been sent.",
+    });
+  } catch (error) {
+    user.password_reset_token = null;
+    user.password_reset_expires = null;
+
+    await user.save({ validateBeforeSave: false });
+
+    res.status(500);
+    throw new Error("Password reset email could not be sent");
+  }
 });
 
 export const reset_password = async_handler(async (req, res) => {
