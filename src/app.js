@@ -18,9 +18,35 @@ const app = express();
 
 app.use(helmet());
 
+const is_allowed_origin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    const is_localhost =
+      url.hostname === "localhost" || url.hostname === "127.0.0.1";
+
+    const is_vercel_app = url.hostname.endsWith(".vercel.app");
+
+    return is_localhost || is_vercel_app;
+  } catch {
+    return false;
+  }
+};
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (is_allowed_origin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   }),
 );
