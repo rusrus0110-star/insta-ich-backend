@@ -16,6 +16,12 @@ const normalize_username = (username) => {
     .toLowerCase();
 };
 
+const normalize_login_identifier = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
 const build_auth_user_response = (user) => {
   return {
     id: user._id,
@@ -78,29 +84,31 @@ export const register_user = async_handler(async (req, res) => {
 });
 
 export const login_user = async_handler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, login_identifier, username, password } = req.body;
 
-  const normalized_email = normalize_email(email);
+  const identifier = normalize_login_identifier(
+    login_identifier || email || username,
+  );
 
-  if (!normalized_email || !password) {
+  if (!identifier || !password) {
     res.status(400);
-    throw new Error("Email and password are required");
+    throw new Error("Username/email and password are required");
   }
 
-  const user = await User.findOne({ email: normalized_email }).select(
-    "+password",
-  );
+  const user = await User.findOne({
+    $or: [{ email: identifier }, { username: identifier }],
+  }).select("+password");
 
   if (!user) {
     res.status(401);
-    throw new Error("Invalid email or password");
+    throw new Error("Invalid username/email or password");
   }
 
   const is_password_valid = await user.compare_password(password);
 
   if (!is_password_valid) {
     res.status(401);
-    throw new Error("Invalid email or password");
+    throw new Error("Invalid username/email or password");
   }
 
   const token = generate_token(user._id);
