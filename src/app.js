@@ -10,6 +10,7 @@ import post_routes from "./routes/post_routes.js";
 import comment_routes from "./routes/comment_routes.js";
 import notification_routes from "./routes/notification_routes.js";
 import message_routes from "./routes/message_routes.js";
+import upload_routes from "./routes/upload_routes.js";
 
 import not_found_middleware from "./middlewares/not_found_middleware.js";
 import error_middleware from "./middlewares/error_middleware.js";
@@ -82,6 +83,7 @@ app.use("/api/posts", post_routes);
 app.use("/api/comments", comment_routes);
 app.use("/api/notifications", notification_routes);
 app.use("/api", message_routes);
+app.use("/api", upload_routes);
 
 app.use(not_found_middleware);
 app.use(error_middleware);
