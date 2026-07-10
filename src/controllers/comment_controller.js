@@ -59,13 +59,15 @@ export const create_comment = async_handler(async (req, res) => {
     text: normalized_text,
   });
 
-  await create_notification({
-    recipient: post.author,
-    sender: req.user._id,
-    type: "comment",
-    post: post._id,
-    comment: comment._id,
-  });
+  if (String(post.author) !== String(req.user._id)) {
+    await create_notification({
+      recipient: post.author,
+      sender: req.user._id,
+      type: "comment",
+      post: post._id,
+      comment: comment._id,
+    });
+  }
 
   const populated_comment = await Comment.findById(comment._id).populate(
     "author",
@@ -134,7 +136,17 @@ export const delete_comment = async_handler(async (req, res) => {
     throw new Error("Comment not found");
   }
 
-  if (String(comment.author) !== String(req.user._id)) {
+  const post = await Post.findById(comment.post);
+
+  if (!post) {
+    res.status(404);
+    throw new Error("Post not found");
+  }
+
+  const is_comment_author = String(comment.author) === String(req.user._id);
+  const is_post_author = String(post.author) === String(req.user._id);
+
+  if (!is_comment_author && !is_post_author) {
     res.status(403);
     throw new Error("You can delete only your own comments");
   }
@@ -144,5 +156,6 @@ export const delete_comment = async_handler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Comment deleted successfully",
+    comment_id,
   });
 });
