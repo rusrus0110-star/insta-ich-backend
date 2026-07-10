@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 import create_notification from "../utils/create_notification.js";
 import Post from "../models/post_model.js";
 import User from "../models/user_model.js";
@@ -9,12 +10,18 @@ const is_valid_object_id = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
-const is_valid_base64_image = (value) => {
+const is_valid_image_value = (value) => {
   if (!value || typeof value !== "string") {
     return false;
   }
 
-  return value.trim().startsWith("data:image/");
+  const normalized_value = value.trim();
+
+  return (
+    normalized_value.startsWith("data:image/") ||
+    normalized_value.startsWith("http://") ||
+    normalized_value.startsWith("https://")
+  );
 };
 
 const build_author_response = (author) => {
@@ -43,6 +50,8 @@ const build_post_response = (
     id: post._id,
     author: build_author_response(post.author),
     image: post.image,
+    image_url: post.image,
+    public_id: post.public_id || "",
     caption: post.caption,
     likes_count: post.likes.length,
     comments_count,
@@ -80,27 +89,34 @@ const get_comments_count_for_posts = async (post_ids) => {
 };
 
 export const create_post = async_handler(async (req, res) => {
-  const { image, caption } = req.body;
+  const { image, image_url, public_id, caption } = req.body;
 
-  if (!image) {
+  const post_image = image || image_url;
+
+  if (!post_image) {
     res.status(400);
     throw new Error("Post image is required");
   }
 
-  if (!is_valid_base64_image(image)) {
+  if (!is_valid_image_value(post_image)) {
     res.status(400);
-    throw new Error("Post image must be a valid Base64 image string");
+    throw new Error(
+      "Post image must be a valid image URL or Base64 image string",
+    );
   }
 
-  if (caption !== undefined && String(caption).trim().length > 500) {
+  const normalized_caption = caption ? String(caption).trim() : "";
+
+  if (normalized_caption.length > 2200) {
     res.status(400);
-    throw new Error("Caption must be less than 500 characters");
+    throw new Error("Caption must be less than 2200 characters");
   }
 
   const post = await Post.create({
     author: req.user._id,
-    image: String(image).trim(),
-    caption: caption ? String(caption).trim() : "",
+    image: String(post_image).trim(),
+    public_id: public_id ? String(public_id).trim() : "",
+    caption: normalized_caption,
   });
 
   const populated_post = await Post.findById(post._id).populate(
@@ -212,7 +228,7 @@ export const get_post_by_id = async_handler(async (req, res) => {
 
 export const update_post = async_handler(async (req, res) => {
   const { post_id } = req.params;
-  const { image, caption } = req.body;
+  const { image, image_url, public_id, caption } = req.body;
 
   if (!is_valid_object_id(post_id)) {
     res.status(400);
@@ -231,21 +247,29 @@ export const update_post = async_handler(async (req, res) => {
     throw new Error("You can update only your own posts");
   }
 
-  if (image !== undefined) {
-    if (!is_valid_base64_image(image)) {
+  const post_image = image || image_url;
+
+  if (post_image !== undefined) {
+    if (!is_valid_image_value(post_image)) {
       res.status(400);
-      throw new Error("Post image must be a valid Base64 image string");
+      throw new Error(
+        "Post image must be a valid image URL or Base64 image string",
+      );
     }
 
-    post.image = String(image).trim();
+    post.image = String(post_image).trim();
+  }
+
+  if (public_id !== undefined) {
+    post.public_id = public_id ? String(public_id).trim() : "";
   }
 
   if (caption !== undefined) {
     const normalized_caption = String(caption).trim();
 
-    if (normalized_caption.length > 500) {
+    if (normalized_caption.length > 2200) {
       res.status(400);
-      throw new Error("Caption must be less than 500 characters");
+      throw new Error("Caption must be less than 2200 characters");
     }
 
     post.caption = normalized_caption;
