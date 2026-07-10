@@ -48,8 +48,16 @@ const user_schema = new mongoose.Schema(
       default: "",
     },
 
+    website: {
+      type: String,
+      trim: true,
+      maxlength: [120, "Website must be less than 120 characters"],
+      default: "",
+    },
+
     avatar: {
       type: String,
+      trim: true,
       default: "",
     },
 
