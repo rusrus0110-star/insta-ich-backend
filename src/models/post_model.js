@@ -12,12 +12,19 @@ const post_schema = new mongoose.Schema(
     image: {
       type: String,
       required: [true, "Post image is required"],
+      trim: true,
+    },
+
+    public_id: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     caption: {
       type: String,
       trim: true,
-      maxlength: [500, "Caption must be less than 500 characters"],
+      maxlength: [2200, "Caption must be less than 2200 characters"],
       default: "",
     },
 
