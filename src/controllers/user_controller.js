@@ -18,10 +18,14 @@ const build_user_response = (user, current_user_id = null) => {
     username: user.username,
     full_name: user.full_name,
     email: user.email,
-    bio: user.bio,
-    avatar: user.avatar,
+    bio: user.bio || "",
+    website: user.website || "",
+    avatar: user.avatar || "",
     followers_count: user.followers.length,
     following_count: user.following.length,
+    is_current_user: current_user_id_string
+      ? String(user._id) === current_user_id_string
+      : false,
     is_followed_by_current_user: current_user_id_string
       ? user.followers.some(
           (follower_id) => String(follower_id) === current_user_id_string,
@@ -31,6 +35,52 @@ const build_user_response = (user, current_user_id = null) => {
     updated_at: user.updatedAt,
   };
 };
+
+function normalize_website(value) {
+  const normalized_website = String(value || "").trim();
+
+  if (!normalized_website) {
+    return "";
+  }
+
+  if (normalized_website.length > 120) {
+    throw new Error("Website must be less than 120 characters");
+  }
+
+  return normalized_website;
+}
+
+function normalize_avatar(value) {
+  const normalized_avatar = String(value || "").trim();
+
+  if (!normalized_avatar) {
+    return "";
+  }
+
+  const is_http_url =
+    normalized_avatar.startsWith("http://") ||
+    normalized_avatar.startsWith("https://");
+
+  if (!is_http_url) {
+    throw new Error("Avatar must be a valid image URL");
+  }
+
+  return normalized_avatar;
+}
+
+export const get_current_user_profile = async_handler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("-password");
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    user: build_user_response(user, req.user._id),
+  });
+});
 
 export const get_user_profile = async_handler(async (req, res) => {
   const { user_id } = req.params;
@@ -53,8 +103,31 @@ export const get_user_profile = async_handler(async (req, res) => {
   });
 });
 
+export const get_user_profile_by_username = async_handler(async (req, res) => {
+  const username = String(req.params.username || "")
+    .trim()
+    .toLowerCase();
+
+  if (!username) {
+    res.status(400);
+    throw new Error("Username is required");
+  }
+
+  const user = await User.findOne({ username }).select("-password");
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    user: build_user_response(user, req.user._id),
+  });
+});
+
 export const update_current_user_profile = async_handler(async (req, res) => {
-  const { username, full_name, bio, avatar } = req.body;
+  const { username, full_name, bio, website, avatar } = req.body;
 
   const user = await User.findById(req.user._id);
 
@@ -115,15 +188,22 @@ export const update_current_user_profile = async_handler(async (req, res) => {
     user.bio = normalized_bio;
   }
 
-  if (avatar !== undefined) {
-    const normalized_avatar = String(avatar).trim();
-
-    if (normalized_avatar && !normalized_avatar.startsWith("data:image/")) {
+  if (website !== undefined) {
+    try {
+      user.website = normalize_website(website);
+    } catch (error) {
       res.status(400);
-      throw new Error("Avatar must be a valid Base64 image string");
+      throw new Error(error.message);
     }
+  }
 
-    user.avatar = normalized_avatar;
+  if (avatar !== undefined) {
+    try {
+      user.avatar = normalize_avatar(avatar);
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
+    }
   }
 
   const updated_user = await user.save();
@@ -161,18 +241,7 @@ export const search_users = async_handler(async (req, res) => {
   res.status(200).json({
     success: true,
     count: users.length,
-    users: users.map((user) => ({
-      id: user._id,
-      username: user.username,
-      full_name: user.full_name,
-      bio: user.bio,
-      avatar: user.avatar,
-      followers_count: user.followers.length,
-      following_count: user.following.length,
-      is_followed_by_current_user: user.followers.some(
-        (follower_id) => String(follower_id) === String(req.user._id),
-      ),
-    })),
+    users: users.map((user) => build_user_response(user, req.user._id)),
   });
 });
 
