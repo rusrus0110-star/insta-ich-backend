@@ -1,24 +1,8 @@
-# Instagram-like Backend API
+# ICHgram Backend API
 
-A backend API for a mini social media application similar to Instagram.
+Backend REST API for an Instagram-like social media application.
 
-The project includes user authentication, profile management, posts, likes, comments, user search, and MongoDB data persistence using Mongoose.
-
-## Project Purpose
-
-The goal is to build a REST API for an Instagram-like social media application where users can:
-
-- register and log in;
-- reset their password;
-- manage their profile;
-- search users;
-- follow and unfollow other users;
-- create, update and delete posts;
-- like and unlike posts;
-- add and delete comments;
-- receive notifications for follows, likes and comments;
-- create conversations and exchange messages;
-- store all data in MongoDB.
+The API supports authentication, user profiles, posts, likes, comments, follows, notifications, conversations, messages, and image upload integration.
 
 ## Tech Stack
 
@@ -26,79 +10,50 @@ The goal is to build a REST API for an Instagram-like social media application w
 - Express.js
 - MongoDB Atlas
 - Mongoose
-- JSON Web Token
+- JWT Authentication
 - bcrypt
+- Cloudinary
+- Socket.io
 - dotenv
 - cors
 - helmet
 - morgan
 - express-rate-limit
 
-## Project Structure
+## Main Features
 
-```txt
-src/
-  config/
-    db.js
-  controllers/
-    auth_controller.js
-    user_controller.js
-    post_controller.js
-    comment_controller.js
-  middlewares/
-    auth_middleware.js
-    error_middleware.js
-    not_found_middleware.js
-  models/
-    user_model.js
-    post_model.js
-    comment_model.js
-  routes/
-    auth_routes.js
-    user_routes.js
-    post_routes.js
-    comment_routes.js
-  utils/
-    async_handler.js
-    generate_token.js
-  app.js
+- User registration and login
+- JWT-protected routes
+- Current user profile
+- Profile update with avatar URL
+- User search
+- Follow / unfollow users
+- Create, edit and delete posts
+- Like / unlike posts
+- Add and delete comments
+- Notifications for likes, comments and follows
+- Conversations and direct messages
+- Image upload via Cloudinary
+- MongoDB data persistence
 
-server.js
-.env.example
-.gitignore
-package.json
-README.md
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+NODE_ENV=development
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRES_IN=7d
+
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
-# Environment Variables
-
-# Variable Description
-
-NODE_ENV Application environment
-PORT Server port
-MONGO_URI MongoDB Atlas connection string
-JWT_SECRET Secret key for JWT signing
-JWT_EXPIRES_IN JWT expiration time
-CLIENT_URL Frontend URL for CORS
-
-# Postman Testing Order
-
-Recommended testing flow:
-
-1. GET /api/health
-2. POST /api/auth/register
-3. POST /api/auth/login
-4. GET /api/auth/me
-5. PUT /api/users/profile
-6. GET /api/users/search?query=rus
-7. POST /api/posts
-8. GET /api/posts
-9. GET /api/posts/:post_id
-10. GET /api/posts/user/:user_id
-11. PUT /api/posts/:post_id
-12. POST /api/posts/:post_id/like
-13. POST /api/posts/:post_id/like
-14. POST /api/posts/:post_id/comments
-15. GET /api/posts/:post_id/comments
-16. DELETE /api/comments/:comment_id
-17. DELETE /api/posts/:post_id
+Notes
+All protected routes require a JWT token in the Authorization header.
+Images are uploaded to Cloudinary and stored in MongoDB as URLs.
+Notifications are created for follows, likes, and comments.
+Messages use REST endpoints and Socket.io for real-time updates.
