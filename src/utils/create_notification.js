@@ -1,12 +1,12 @@
 import Notification from "../models/notification_model.js";
 
-const create_notification = async ({
+export default async function create_notification({
   recipient,
   sender,
   type,
   post = null,
   comment = null,
-}) => {
+}) {
   if (!recipient || !sender || !type) {
     return null;
   }
@@ -15,15 +15,11 @@ const create_notification = async ({
     return null;
   }
 
-  const notification = await Notification.create({
+  return Notification.create({
     recipient,
     sender,
     type,
     post,
     comment,
   });
-
-  return notification;
-};
-
-export default create_notification;
+}
