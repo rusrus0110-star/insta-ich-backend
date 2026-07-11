@@ -20,14 +20,38 @@ const build_sender_response = (sender) => {
   };
 };
 
+const build_post_response = (post) => {
+  if (!post) {
+    return null;
+  }
+
+  return {
+    id: post._id,
+    image: post.image,
+    image_url: post.image,
+    caption: post.caption || "",
+  };
+};
+
+const build_comment_response = (comment) => {
+  if (!comment) {
+    return null;
+  }
+
+  return {
+    id: comment._id,
+    text: comment.text || "",
+  };
+};
+
 const build_notification_response = (notification) => {
   return {
     id: notification._id,
     type: notification.type,
     is_read: notification.is_read,
     sender: build_sender_response(notification.sender),
-    post: notification.post || null,
-    comment: notification.comment || null,
+    post: build_post_response(notification.post),
+    comment: build_comment_response(notification.comment),
     created_at: notification.createdAt,
     updated_at: notification.updatedAt,
   };
@@ -41,6 +65,8 @@ export const get_notifications = async_handler(async (req, res) => {
   const [notifications, total, unread_count] = await Promise.all([
     Notification.find({ recipient: req.user._id })
       .populate("sender", "username full_name avatar")
+      .populate("post", "image caption")
+      .populate("comment", "text")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -78,7 +104,10 @@ export const mark_notification_as_read = async_handler(async (req, res) => {
   const notification = await Notification.findOne({
     _id: notification_id,
     recipient: req.user._id,
-  }).populate("sender", "username full_name avatar");
+  })
+    .populate("sender", "username full_name avatar")
+    .populate("post", "image caption")
+    .populate("comment", "text");
 
   if (!notification) {
     res.status(404);
@@ -88,6 +117,10 @@ export const mark_notification_as_read = async_handler(async (req, res) => {
   notification.is_read = true;
 
   const updated_notification = await notification.save();
+
+  await updated_notification.populate("sender", "username full_name avatar");
+  await updated_notification.populate("post", "image caption");
+  await updated_notification.populate("comment", "text");
 
   res.status(200).json({
     success: true,
@@ -141,5 +174,6 @@ export const delete_notification = async_handler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Notification deleted successfully",
+    notification_id,
   });
 });
